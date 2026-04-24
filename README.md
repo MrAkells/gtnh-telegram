@@ -1,44 +1,53 @@
 # GTNH Telegram Achievements
 
-Forge-мод для Minecraft 1.7.10 / GTNH, который отправляет в Telegram сообщение, когда игрок завершает квест BetterQuesting.
+Small Forge 1.7.10 mod for GT New Horizons servers.
 
-## Что делает
+It listens for BetterQuesting completion events and sends a Telegram message
+when a player completes a quest.
 
-- ловит завершение квестов BetterQuesting в GTNH через `QuestEvent.COMPLETED`;
-- формирует текст сообщения по шаблону;
-- отправляет уведомление в Telegram Bot API;
-- читает `bot token` и `chat id` из конфига.
+## Features
 
-## Требования
+- BetterQuesting `QuestEvent.COMPLETED` listener
+- asynchronous Telegram Bot API delivery
+- configurable message template
+- optional repeatable quest filtering
+- clickable quest links for `gtnhquestsbook.top`
 
-- `Java 8`
-- `Gradle 4.4.1+`
-- доступ сервера Minecraft к `https://api.telegram.org`
+## Requirements
 
-Важно:
+- Minecraft Forge `1.7.10-10.13.4.1614`
+- GTNH BetterQuesting
+- Java 8
+- outbound HTTPS access to `https://api.telegram.org`
 
-- Forge 1.7.10 обычно не собирается на современных JDK вроде `Java 25`. Для сборки и запуска dev-окружения используй именно `Java 8`.
-- В проекте используется форк `ForgeGradle 1.2` от `anatawa12`, потому что он заметно практичнее для сборки старых 1.7.10-модов на современной инфраструктуре.
+Builds should be done with Java 8. Old ForgeGradle/Groovy tooling does not run
+reliably on modern JDKs.
 
-## Сборка
+## Build
 
-Используй wrapper, который уже лежит в проекте:
-
-```bash
+```sh
 ./gradlew build
 ```
 
-Готовый jar появится в `build/libs/`.
+The mod jar is written to:
 
-## Настройка
+```text
+build/libs/
+```
 
-После первого запуска мода будет создан файл:
+## Install
+
+Copy the built jar to the server `mods/` directory.
+
+The config file is created on first start:
 
 ```text
 config/gtnhtelegram.cfg
 ```
 
-Заполни в нем:
+## Config
+
+Minimal config:
 
 ```ini
 enabled=true
@@ -46,32 +55,36 @@ sendQuestNotifications=true
 sendRepeatableQuestNotifications=false
 botToken=123456789:YOUR_BOT_TOKEN
 chatId=-1001234567890
-questMessageFormat=[Minecraft] {player} завершил квест: {quest}
+questMessageFormat=[Minecraft] {player} completed quest: {quest}
 questBaseUrl=https://gtnhquestsbook.top/?id=
+connectTimeoutMs=5000
+readTimeoutMs=5000
 ```
 
-## Как получить `botToken`
+Supported placeholders:
 
-1. Открой Telegram и найди `@BotFather`.
-2. Выполни `/newbot`.
-3. Сохрани выданный токен.
+```text
+{player}
+{playerUuid}
+{quest}
+{questName}
+{questId}
+{questUrl}
+{chapter}
+```
 
-## Как получить `chatId`
+`{quest}` is an HTML link. Messages are sent with Telegram `parse_mode=HTML`.
 
-- Для личного чата удобно написать боту и получить `chat_id` через Bot API `getUpdates`.
-- Для группы добавь туда бота, отправь сообщение в группу и посмотри `chat.id` в ответе `getUpdates`.
-- У групп и супергрупп `chat_id` обычно отрицательный.
+## Telegram
 
-## Проверка
+Create a bot with `@BotFather` and put the token in `botToken`.
 
-1. Собери мод.
-2. Положи jar в `mods/`.
-3. Запусти сервер или клиент с интегрированным сервером.
-4. Заверши любой квест BetterQuesting.
-5. Проверь, пришло ли сообщение в Telegram.
+To get `chatId`, send a message to the bot or group, then inspect the result of
+Telegram Bot API `getUpdates`. Group and supergroup ids are usually negative.
 
-## Ограничения
+## Notes
 
-- BetterQuesting-поддержка рассчитана на GTNH-форк BetterQuesting и собирается против `BetterQuesting-3.7.15-GTNH-dev.jar`.
-- Мод отправляет только события завершения квестов BetterQuesting.
-- `{quest}` в Telegram теперь подставляется как кликабельная HTML-ссылка на онлайн-квестбук, а сам `id` кодируется из BetterQuesting UUID в тот же base64-формат, который использует сайт.
+- The mod is compiled against the GTNH BetterQuesting dev jar in `libs/`.
+- Only BetterQuesting quest completion events are sent.
+- Hidden trigger quests with names starting with `Trigger:` are ignored.
+- Telegram failures are logged and do not block the server tick thread.
