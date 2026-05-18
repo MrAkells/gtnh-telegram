@@ -29,15 +29,17 @@ public final class TelegramSender {
 
     private static volatile String botToken = "";
     private static volatile String chatId = "";
+    private static volatile int messageThreadId = 0;
     private static volatile int connectTimeoutMs = 5000;
     private static volatile int readTimeoutMs = 5000;
 
     private TelegramSender() {
     }
 
-    public static void configure(String token, String targetChatId, int connectTimeout, int readTimeout) {
+    public static void configure(String token, String targetChatId, int targetMessageThreadId, int connectTimeout, int readTimeout) {
         botToken = token == null ? "" : token.trim();
         chatId = targetChatId == null ? "" : targetChatId.trim();
+        messageThreadId = targetMessageThreadId;
         connectTimeoutMs = connectTimeout;
         readTimeoutMs = readTimeout;
         MISSING_CONFIG_WARNING_SHOWN.set(false);
@@ -75,6 +77,9 @@ public final class TelegramSender {
                     + "&text=" + encode(text)
                     + "&parse_mode=" + encode("HTML")
                     + "&disable_web_page_preview=true";
+            if (messageThreadId > 0) {
+                body += "&message_thread_id=" + messageThreadId;
+            }
             byte[] payload = body.getBytes(UTF_8);
 
             OutputStream outputStream = connection.getOutputStream();

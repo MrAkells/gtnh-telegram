@@ -10,6 +10,7 @@ when a player completes a quest.
 - BetterQuesting `QuestEvent.COMPLETED` listener
 - asynchronous Telegram Bot API delivery
 - configurable message template
+- optional Telegram forum topic/thread targeting
 - optional repeatable quest filtering
 - clickable quest links for `gtnhquestsbook.top`
 
@@ -55,6 +56,7 @@ sendQuestNotifications=true
 sendRepeatableQuestNotifications=false
 botToken=123456789:YOUR_BOT_TOKEN
 chatId=-1001234567890
+messageThreadId=0
 questMessageFormat=[Minecraft] {player} completed quest: {quest}
 questBaseUrl=https://gtnhquestsbook.top/?id=
 connectTimeoutMs=5000
@@ -81,6 +83,10 @@ Create a bot with `@BotFather` and put the token in `botToken`.
 
 To get `chatId`, send a message to the bot or group, then inspect the result of
 Telegram Bot API `getUpdates`. Group and supergroup ids are usually negative.
+
+To send into a specific Telegram forum topic, set `messageThreadId` to that
+topic's `message_thread_id` from `getUpdates`. Leave it as `0` for the main
+chat.
 
 ## Notes
 

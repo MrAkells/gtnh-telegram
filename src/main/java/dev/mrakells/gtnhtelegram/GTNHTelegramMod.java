@@ -26,6 +26,7 @@ public class GTNHTelegramMod {
         TelegramSender.configure(
                 ModConfig.botToken,
                 ModConfig.chatId,
+                ModConfig.messageThreadId,
                 ModConfig.connectTimeoutMs,
                 ModConfig.readTimeoutMs
         );

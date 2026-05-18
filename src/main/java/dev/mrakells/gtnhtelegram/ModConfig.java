@@ -9,6 +9,7 @@ public final class ModConfig {
     public static boolean sendRepeatableQuestNotifications = false;
     public static String botToken = "";
     public static String chatId = "";
+    public static int messageThreadId = 0;
     public static String questMessageFormat = "[Minecraft] {player} завершил квест: {quest}";
     public static String questBaseUrl = "https://gtnhquestsbook.top/?id=";
     public static int connectTimeoutMs = 5000;
@@ -52,6 +53,14 @@ public final class ModConfig {
                     "",
                     "Telegram chat id that will receive notifications."
             ).trim();
+            messageThreadId = configuration.getInt(
+                    "messageThreadId",
+                    Configuration.CATEGORY_GENERAL,
+                    0,
+                    0,
+                    Integer.MAX_VALUE,
+                    "Telegram forum topic/thread id. Set to 0 to send to the main chat."
+            );
             questMessageFormat = configuration.getString(
                     "questMessageFormat",
                     Configuration.CATEGORY_GENERAL,
