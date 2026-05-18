@@ -1,49 +1,54 @@
-buildscript {
-    repositories {
-        mavenCentral()
-        jcenter()
-        maven {
-            name = "forge"
-            url = "https://maven.minecraftforge.net"
-        }
-    }
-    dependencies {
-        classpath("com.anatawa12.forge:ForgeGradle:1.2-1.1.+") {
-            changing = true
-        }
-    }
+plugins {
+    id "java"
+    id "com.gtnewhorizons.retrofuturagradle" version "2.0.2"
 }
-
-apply plugin: "forge"
 
 version = project.modVersion
 group = project.modGroup
-archivesBaseName = project.modBaseName
+base {
+    archivesName = project.modBaseName
+}
 
-sourceCompatibility = targetCompatibility = "1.7"
-
-compileJava {
-    sourceCompatibility = targetCompatibility = "1.7"
-    options.compilerArgs << "-Xlint:-options"
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
 }
 
 minecraft {
-    version = project.minecraft_version + "-" + project.forge_version
-    runDir = "run"
+    mcVersion.set(project.minecraftVersion)
+    mcpMappingChannel.set("stable")
+    mcpMappingVersion.set("12")
+    username.set("Developer")
+    javaCompatibilityVersion.set(7)
+    jvmLanguageVersion.set(JavaLanguageVersion.of(8))
+}
+
+repositories {
+    maven {
+        name = "GTNH Maven"
+        url = uri("https://nexus.gtnewhorizons.com/repository/public/")
+    }
+    mavenCentral()
 }
 
 dependencies {
     compileOnly files("libs/BetterQuesting-3.7.15-GTNH-dev.jar")
 }
 
-processResources {
+tasks.withType(JavaCompile).configureEach {
+    sourceCompatibility = "1.7"
+    targetCompatibility = "1.7"
+    options.compilerArgs << "-Xlint:-options"
+}
+
+tasks.processResources {
     inputs.property "version", project.version
     inputs.property "mcversion", project.minecraftVersion
     inputs.property "modid", project.modId
     inputs.property "modname", project.modName
 
-    from(sourceSets.main.resources.srcDirs) {
-        include "mcmod.info"
+    filesMatching("mcmod.info") {
         expand(
                 "version": project.version,
                 "mcversion": project.minecraftVersion,
@@ -51,13 +56,9 @@ processResources {
                 "modname": project.modName
         )
     }
-
-    from(sourceSets.main.resources.srcDirs) {
-        exclude "mcmod.info"
-    }
 }
 
-jar {
+tasks.jar {
     manifest {
         attributes(
                 "Implementation-Title": project.modName,
