@@ -33,7 +33,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly files("libs/BetterQuesting-3.7.15-GTNH-dev.jar")
+    compileOnly files("libs/BetterQuesting-${project.betterQuestingVersion}-dev.jar")
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -62,7 +62,9 @@ tasks.jar {
     manifest {
         attributes(
                 "Implementation-Title": project.modName,
-                "Implementation-Version": project.version
+                "Implementation-Version": project.version,
+                "GTNH-Version": project.gtnhVersion,
+                "BetterQuesting-Version": project.betterQuestingVersion
         )
     }
 }

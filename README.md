@@ -16,8 +16,9 @@ when a player completes a quest.
 
 ## Requirements
 
+- GTNH `2.8.4`
 - Minecraft Forge `1.7.10-10.13.4.1614`
-- GTNH BetterQuesting
+- GTNH BetterQuesting `3.7.15-GTNH`
 - Java 8
 - outbound HTTPS access to `https://api.telegram.org`
 
@@ -88,9 +89,42 @@ To send into a specific Telegram forum topic, set `messageThreadId` to that
 topic's `message_thread_id` from `getUpdates`. Leave it as `0` for the main
 chat.
 
+## Release
+
+Build the jar:
+
+```sh
+./gradlew build
+```
+
+Create and push a version tag:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+In Gitea, open the repository, go to **Releases**, create a release from the
+tag, and upload the jar from `build/libs/`.
+
+Use release title:
+
+```text
+v1.0.0 for GTNH 2.8.4
+```
+
+Mention the bundled compatibility in the release notes:
+
+```text
+Target GTNH: 2.8.4
+BetterQuesting API: 3.7.15-GTNH
+```
+
 ## Notes
 
 - The mod is compiled against the GTNH BetterQuesting dev jar in `libs/`.
+- When updating GTNH, check its bundled BetterQuesting version and update
+  `betterQuestingVersion` plus the matching jar in `libs/`.
 - Only BetterQuesting quest completion events are sent.
 - Hidden trigger quests with names starting with `Trigger:` are ignored.
 - Telegram failures are logged and do not block the server tick thread.
