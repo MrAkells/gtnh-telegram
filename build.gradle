@@ -20,7 +20,9 @@ minecraft {
     mcpMappingChannel.set("stable")
     mcpMappingVersion.set("12")
     username.set("Developer")
-    javaCompatibilityVersion.set(7)
+    javaCompatibilityVersion.set(8)
+    // Generates dev.mrakells.gtnhtelegram.Tags, so the version is defined only in gradle.properties.
+    injectedTags.put("VERSION", project.version)
     jvmLanguageVersion.set(JavaLanguageVersion.of(8))
 }
 
@@ -33,13 +35,25 @@ repositories {
 }
 
 dependencies {
-    compileOnly files("libs/BetterQuesting-${project.betterQuestingVersion}-dev.jar")
+    testImplementation "junit:junit:4.13.2"
+    compileOnly("com.github.GTNewHorizons:BetterQuesting:${project.betterQuestingVersion}:dev") {
+        transitive = false
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    sourceCompatibility = "1.7"
-    targetCompatibility = "1.7"
+    sourceCompatibility = "1.8"
+    targetCompatibility = "1.8"
+    options.encoding = "UTF-8"
     options.compilerArgs << "-Xlint:-options"
+}
+
+tasks.injectTags.configure {
+    outputClassName.set("${project.modGroup}.Tags")
+}
+
+tasks.test {
+    useJUnit()
 }
 
 tasks.processResources {
