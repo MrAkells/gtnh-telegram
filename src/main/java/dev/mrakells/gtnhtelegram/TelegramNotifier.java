@@ -39,7 +39,7 @@ final class TelegramNotifier {
         Map<String, List<QuestCompletion>> byPlayers = new LinkedHashMap<String, List<QuestCompletion>>();
 
         for (QuestCompletion completion : completions) {
-            String group = completion.players() + "|" + completion.team();
+            String group = completion.playerUuids() + "|" + completion.teamId();
 
             if (!byPlayers.containsKey(group)) {
                 byPlayers.put(group, new ArrayList<QuestCompletion>());

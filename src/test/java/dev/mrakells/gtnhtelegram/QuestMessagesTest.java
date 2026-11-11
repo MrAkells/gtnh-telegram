@@ -46,8 +46,8 @@ public class QuestMessagesTest {
     @Test
     public void omitsLinkWhenThereIsNoUrl() {
         QuestCompletion completion = new QuestCompletion(
-                100, "q1", "Quest", "", "", "",
-                java.util.Collections.singletonList("Alice"), java.util.Collections.singletonList("u")
+                100, "q1", "Quest", "", "", null, "",
+                java.util.Collections.singletonList("u"), java.util.Collections.singletonList("Alice")
         );
 
         assertEquals("Quest", QuestMessages.single("{quest}", "", completion));

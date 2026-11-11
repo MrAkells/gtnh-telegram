@@ -10,19 +10,17 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import org.apache.logging.log4j.Logger;
 
 /**
- * The most recent quest completions and the current teams, mirrored to a JSON
- * file that other services (for example a website) can read.
+ * The most recent quest completions and the current {@link Roster}, mirrored
+ * to a JSON file that other services (for example a website) can read.
  *
  * Not thread-safe: {@link QuestTracker} confines it to its worker thread.
  */
 final class QuestFeed {
-    static final int FORMAT_VERSION = 2;
+    static final int FORMAT_VERSION = 3;
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
@@ -31,7 +29,9 @@ final class QuestFeed {
     private final Logger logger;
     /** Newest first. */
     private final List<QuestCompletion> quests = new ArrayList<QuestCompletion>();
-    private List<Team> teams = new ArrayList<Team>();
+    private Roster roster = Roster.empty();
+    /** The roster as last written, to tell whether a new one differs. */
+    private String rosterJson = GSON.toJson(roster);
 
     QuestFeed(Path file, int maxEntries, Logger logger) {
         this.file = file.toAbsolutePath();
@@ -47,14 +47,14 @@ final class QuestFeed {
         return Collections.unmodifiableList(quests);
     }
 
-    List<Team> teams() {
-        return Collections.unmodifiableList(teams);
+    Roster roster() {
+        return roster;
     }
 
     /** Reads the entries already stored in the file, so the feed survives server restarts. */
     void load() {
         quests.clear();
-        teams = new ArrayList<Team>();
+        setRosterQuietly(Roster.empty());
 
         if (!Files.isRegularFile(file)) {
             return;
@@ -64,7 +64,8 @@ final class QuestFeed {
             String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
             Document document = GSON.fromJson(json, Document.class);
 
-            if (document == null) {
+            // A file in another format is left alone until the first write replaces it.
+            if (document == null || document.version != FORMAT_VERSION) {
                 return;
             }
 
@@ -76,13 +77,8 @@ final class QuestFeed {
                 }
             }
 
-            if (document.teams != null) {
-                for (Team team : document.teams) {
-                    if (team != null) {
-                        teams.add(team);
-                    }
-                }
-            }
+            // Kept until the server has started and the current roster is known.
+            setRosterQuietly(new Roster(document.chapters, document.players, document.teams));
         } catch (Exception e) {
             logger.warn("Could not read quest feed " + file + ", starting with an empty one", e);
         }
@@ -105,12 +101,19 @@ final class QuestFeed {
         write();
     }
 
-    /** Replaces the team list and rewrites the file if the list has changed. */
-    void setTeams(List<Team> current) {
-        if (!teams.equals(current)) {
-            teams = new ArrayList<Team>(current);
+    /** Replaces the roster and rewrites the file if anything in it has changed. */
+    void setRoster(Roster current) {
+        String before = rosterJson;
+        setRosterQuietly(current);
+
+        if (!rosterJson.equals(before)) {
             write();
         }
+    }
+
+    private void setRosterQuietly(Roster current) {
+        roster = current;
+        rosterJson = GSON.toJson(current);
     }
 
     private void insert(QuestCompletion completion) {
@@ -119,9 +122,7 @@ final class QuestFeed {
             QuestCompletion existing = quests.get(i);
 
             if (existing.key().equals(completion.key())) {
-                Set<String> players = new LinkedHashSet<String>(existing.players());
-                players.addAll(completion.players());
-                quests.set(i, existing.withPlayers(new ArrayList<String>(players), Collections.<String>emptyList()));
+                quests.set(i, existing.mergedWith(completion));
                 return;
             }
         }
@@ -138,7 +139,9 @@ final class QuestFeed {
         Document document = new Document();
         document.version = FORMAT_VERSION;
         document.updated = System.currentTimeMillis() / 1000L;
-        document.teams = teams;
+        document.chapters = roster.chapters();
+        document.players = roster.players();
+        document.teams = roster.teams();
         document.quests = quests;
 
         try {
@@ -160,7 +163,9 @@ final class QuestFeed {
     private static final class Document {
         int version;
         long updated;
-        List<Team> teams;
+        List<Roster.Chapter> chapters;
+        List<Roster.Player> players;
+        List<Roster.Team> teams;
         List<QuestCompletion> quests;
     }
 }

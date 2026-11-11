@@ -1,5 +1,6 @@
 package dev.mrakells.gtnhtelegram;
 
+import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
@@ -34,7 +35,7 @@ public class GTNHTelegramMod {
 
     private QuestTracker tracker;
     /** Kept as a Runnable so this class loads even when BetterQuesting is absent. */
-    private Runnable teamsRefresher;
+    private Runnable rosterRefresher;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -73,11 +74,13 @@ public class GTNHTelegramMod {
                 config.sendRepeatableQuestNotifications,
                 config.questBaseUrl
         );
+        // Quest events come through the Forge bus, server ticks through the FML one.
         MinecraftForge.EVENT_BUS.register(listener);
-        teamsRefresher = new Runnable() {
+        FMLCommonHandler.instance().bus().register(listener);
+        rosterRefresher = new Runnable() {
             @Override
             public void run() {
-                listener.refreshTeams();
+                listener.refreshRoster();
             }
         };
 
@@ -93,14 +96,8 @@ public class GTNHTelegramMod {
     /** BetterQuesting has loaded the world's quest data by now. */
     @Mod.EventHandler
     public void serverStarted(FMLServerStartedEvent event) {
-        if (teamsRefresher == null) {
-            return;
-        }
-
-        try {
-            teamsRefresher.run();
-        } catch (RuntimeException e) {
-            LOGGER.error("Could not read BetterQuesting teams", e);
+        if (rosterRefresher != null) {
+            rosterRefresher.run();
         }
     }
 

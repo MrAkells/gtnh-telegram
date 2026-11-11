@@ -14,18 +14,22 @@ import betterquesting.api.questing.party.IPartyDatabase;
 import betterquesting.api.storage.INameCache;
 import betterquesting.api2.storage.DBEntry;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 
 /**
- * Turns BetterQuesting events into {@link QuestCompletion}s. Runs on the
- * server thread and only reads BetterQuesting data; everything slow happens
- * in {@link QuestTracker}.
+ * Turns BetterQuesting events into {@link QuestCompletion}s and BetterQuesting
+ * data into a {@link Roster}. Runs on the server thread and only reads
+ * BetterQuesting data; everything slow happens in {@link QuestTracker}.
  */
 public class BetterQuestingListener {
     /**
@@ -36,10 +40,18 @@ public class BetterQuestingListener {
     private static final long STALE_AFTER_MS = 60000L;
     /** GTNH names its invisible helper quests this way. */
     private static final String HELPER_QUEST_PREFIX = "Trigger:";
+    /**
+     * Joining a team, leaving it or renaming it raises no event this mod can
+     * see, so the roster is also rebuilt every five minutes.
+     */
+    private static final int ROSTER_REFRESH_TICKS = 5 * 60 * 20;
 
     private final QuestTracker tracker;
     private final boolean includeRepeatable;
     private final String questBaseUrl;
+    private int ticksSinceRefresh;
+    /** Set after an unexpected failure, so a broken roster is logged once instead of every five minutes. */
+    private boolean rosterBroken;
 
     public BetterQuestingListener(QuestTracker tracker, boolean includeRepeatable, String questBaseUrl) {
         this.tracker = tracker;
@@ -71,38 +83,105 @@ public class BetterQuestingListener {
         }
     }
 
-    /** Publishes the current teams, so the feed can show who belongs where. */
-    public void refreshTeams() {
-        IPartyDatabase parties = QuestingAPI.getAPI(ApiReference.PARTY_DB);
-        if (parties == null) {
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END && ++ticksSinceRefresh >= ROSTER_REFRESH_TICKS) {
+            refreshRoster();
+        }
+    }
+
+    /**
+     * Publishes every player and team with their progress, so the feed can
+     * show who belongs where and how far they have got. Never throws: this
+     * runs inside the server tick, where a failure would stop the server.
+     */
+    public void refreshRoster() {
+        ticksSinceRefresh = 0;
+
+        if (rosterBroken || !tracker.wantsRoster()) {
             return;
         }
 
-        List<Team> teams = new ArrayList<Team>();
+        try {
+            Roster roster = readRoster();
 
-        for (DBEntry<IParty> entry : parties.getEntries()) {
-            List<UUID> members = entry.getValue().getMembers();
+            if (roster != null) {
+                tracker.updateRoster(roster);
+            }
+        } catch (Throwable e) {
+            rosterBroken = true;
+            GTNHTelegramMod.LOGGER.error("Could not read players and teams from BetterQuesting, the quest feed will not list them", e);
+        }
+    }
 
-            if (members.size() < 2) {
+    private Roster readRoster() {
+        IQuestDatabase quests = QuestingAPI.getAPI(ApiReference.QUEST_DB);
+        IQuestLineDatabase lines = QuestingAPI.getAPI(ApiReference.LINE_DB);
+        INameCache names = QuestingAPI.getAPI(ApiReference.NAME_CACHE);
+        IPartyDatabase parties = QuestingAPI.getAPI(ApiReference.PARTY_DB);
+
+        if (quests == null || lines == null || names == null || parties == null) {
+            return null;
+        }
+
+        // Hidden and helper quests are not part of the book a player sees, so they are not progress either.
+        Map<UUID, IQuest> counted = new HashMap<UUID, IQuest>();
+        for (Map.Entry<UUID, IQuest> entry : quests.entrySet()) {
+            IQuest quest = entry.getValue();
+
+            if (quest != null
+                    && quest.getProperty(NativeProps.VISIBILITY) != EnumQuestVisibility.HIDDEN
+                    && !clean(quest.getProperty(NativeProps.NAME)).startsWith(HELPER_QUEST_PREFIX)) {
+                counted.put(entry.getKey(), quest);
+            }
+        }
+
+        RosterBuilder builder = new RosterBuilder();
+
+        for (Map.Entry<UUID, IQuestLine> entry : lines.getOrderedEntries()) {
+            Set<String> questIds = new HashSet<String>();
+
+            for (UUID questId : entry.getValue().keySet()) {
+                if (counted.containsKey(questId)) {
+                    questIds.add(questId.toString());
+                }
+            }
+
+            builder.chapter(clean(entry.getValue().getProperty(NativeProps.NAME)), questIds);
+        }
+
+        for (String name : names.getAllNames()) {
+            UUID playerId = names.getUUID(name);
+            if (playerId == null) {
                 continue;
             }
 
-            List<String> names = new ArrayList<String>();
-            for (UUID member : members) {
-                names.add(playerName(member));
-            }
+            builder.player(playerId.toString(), name);
 
-            teams.add(new Team(clean(entry.getValue().getProperties().getProperty(NativeProps.NAME)), names));
+            for (Map.Entry<UUID, IQuest> entry : counted.entrySet()) {
+                if (entry.getValue().isComplete(playerId)) {
+                    builder.completion(playerId.toString(), entry.getKey().toString(), completionTime(entry.getValue(), playerId, 0L) / 1000L);
+                }
+            }
         }
 
-        tracker.updateTeams(teams);
+        for (DBEntry<IParty> entry : parties.getEntries()) {
+            List<String> members = new ArrayList<String>();
+            for (UUID member : entry.getValue().getMembers()) {
+                members.add(member.toString());
+            }
+
+            builder.party(entry.getID(), clean(entry.getValue().getProperties().getProperty(NativeProps.NAME)), members);
+        }
+
+        return builder.build();
     }
 
     private void report(UUID playerId, Set<UUID> questIds) {
         IQuestDatabase quests = QuestingAPI.getAPI(ApiReference.QUEST_DB);
         long now = System.currentTimeMillis();
         String playerName = null;
-        String teamName = null;
+        DBEntry<IParty> team = null;
 
         for (UUID questId : questIds) {
             IQuest quest = quests.get(questId);
@@ -122,7 +201,7 @@ public class BetterQuestingListener {
 
             if (playerName == null) {
                 playerName = playerName(playerId);
-                teamName = teamName(playerId);
+                team = team(playerId);
             }
 
             tracker.report(new QuestCompletion(
@@ -131,14 +210,15 @@ public class BetterQuestingListener {
                     questName.isEmpty() ? questId.toString() : questName,
                     chapterName(questId),
                     QuestLinks.questUrl(questBaseUrl, questId),
-                    teamName,
-                    Collections.singletonList(playerName),
-                    Collections.singletonList(playerId.toString())
+                    team == null ? null : Integer.valueOf(team.getID()),
+                    team == null ? "" : clean(team.getValue().getProperties().getProperty(NativeProps.NAME)),
+                    Collections.singletonList(playerId.toString()),
+                    Collections.singletonList(playerName)
             ));
         }
 
         if (playerName != null) {
-            refreshTeams();
+            refreshRoster();
         }
     }
 
@@ -169,16 +249,12 @@ public class BetterQuestingListener {
         return cached == null || cached.trim().isEmpty() ? playerId.toString() : cached;
     }
 
-    /** @return the name of the player's team, or an empty string for a solo player */
-    private static String teamName(UUID playerId) {
+    /** @return the player's team, or null for a solo player; a party of one is not a team */
+    private static DBEntry<IParty> team(UUID playerId) {
         IPartyDatabase parties = QuestingAPI.getAPI(ApiReference.PARTY_DB);
         DBEntry<IParty> entry = parties == null ? null : parties.getParty(playerId);
 
-        if (entry == null || entry.getValue().getMembers().size() < 2) {
-            return "";
-        }
-
-        return clean(entry.getValue().getProperties().getProperty(NativeProps.NAME));
+        return entry == null || entry.getValue().getMembers().size() < 2 ? null : entry;
     }
 
     private static String chapterName(UUID questId) {

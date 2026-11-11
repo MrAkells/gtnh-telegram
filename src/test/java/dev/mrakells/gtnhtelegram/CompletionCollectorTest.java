@@ -21,9 +21,10 @@ public class CompletionCollectorTest {
 
         List<QuestCompletion> ready = collector.drain(4000L);
         assertEquals(1, ready.size());
-        assertEquals(Arrays.asList("Alice", "Bob"), ready.get(0).players());
+        assertEquals(Arrays.asList("Alice", "Bob"), ready.get(0).playerNames());
         assertEquals(Arrays.asList("uuid-of-Alice", "uuid-of-Bob"), ready.get(0).playerUuids());
-        assertEquals("smak", ready.get(0).team());
+        assertEquals("smak", ready.get(0).teamName());
+        assertEquals(Integer.valueOf(7), ready.get(0).teamId());
 
         assertTrue("drained completions are gone", collector.drainAll().isEmpty());
     }

@@ -63,30 +63,20 @@ final class CompletionCollector {
     }
 
     private static final class Pending {
-        private final QuestCompletion first;
+        private QuestCompletion merged;
         private final long firstSeenMs;
-        /** Player name to UUID, in the order the players were reported. */
-        private final Map<String, String> players = new LinkedHashMap<String, String>();
 
         Pending(QuestCompletion first, long firstSeenMs) {
-            this.first = first;
+            this.merged = first;
             this.firstSeenMs = firstSeenMs;
-            add(first);
         }
 
         void add(QuestCompletion completion) {
-            List<String> names = completion.players();
-            List<String> uuids = completion.playerUuids();
-
-            for (int i = 0; i < names.size(); i++) {
-                if (!players.containsKey(names.get(i))) {
-                    players.put(names.get(i), i < uuids.size() ? uuids.get(i) : "");
-                }
-            }
+            merged = merged.mergedWith(completion);
         }
 
         QuestCompletion merged() {
-            return first.withPlayers(new ArrayList<String>(players.keySet()), new ArrayList<String>(players.values()));
+            return merged;
         }
     }
 }

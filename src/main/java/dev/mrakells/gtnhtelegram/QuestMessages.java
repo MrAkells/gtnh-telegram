@@ -20,7 +20,7 @@ final class QuestMessages {
      * @param pluralTemplate used instead of {@code template} when several players completed the quest; may be empty
      */
     static String single(String template, String pluralTemplate, QuestCompletion completion) {
-        boolean plural = completion.players().size() > 1 && pluralTemplate != null && !pluralTemplate.trim().isEmpty();
+        boolean plural = completion.playerUuids().size() > 1 && pluralTemplate != null && !pluralTemplate.trim().isEmpty();
 
         return fill(plural ? pluralTemplate : template, placeholders(completion));
     }
@@ -92,9 +92,9 @@ final class QuestMessages {
 
     private static Map<String, String> placeholders(QuestCompletion completion) {
         Map<String, String> values = new HashMap<String, String>();
-        values.put("player", escapeHtml(join(completion.players())));
+        values.put("player", escapeHtml(join(completion.playerNames())));
         values.put("playerUuid", escapeHtml(join(completion.playerUuids())));
-        values.put("team", escapeHtml(completion.team()));
+        values.put("team", escapeHtml(completion.teamName()));
         values.put("quest", questLink(completion));
         values.put("questName", escapeHtml(completion.quest()));
         values.put("questId", escapeHtml(completion.questId()));

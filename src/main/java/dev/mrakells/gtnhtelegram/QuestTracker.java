@@ -44,7 +44,12 @@ final class QuestTracker {
         }
     }
 
-    void updateTeams(final List<Team> teams) {
+    /** The roster is only ever written to the feed, so without a feed nobody needs to compute it. */
+    boolean wantsRoster() {
+        return feed != null;
+    }
+
+    void updateRoster(final Roster roster) {
         if (feed == null) {
             return;
         }
@@ -52,7 +57,7 @@ final class QuestTracker {
         worker.execute(new Runnable() {
             @Override
             public void run() {
-                feed.setTeams(teams);
+                feed.setRoster(roster);
             }
         });
     }
