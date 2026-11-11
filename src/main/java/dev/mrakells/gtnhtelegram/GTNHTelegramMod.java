@@ -1,8 +1,11 @@
 package dev.mrakells.gtnhtelegram;
 
-import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.event.FMLServerStartedEvent;
+import cpw.mods.fml.common.event.FMLServerStoppingEvent;
+import java.io.File;
 import net.minecraftforge.common.MinecraftForge;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -10,30 +13,136 @@ import org.apache.logging.log4j.Logger;
 @Mod(
         modid = GTNHTelegramMod.MOD_ID,
         name = GTNHTelegramMod.MOD_NAME,
-        version = GTNHTelegramMod.VERSION,
-        acceptableRemoteVersions = "*"
+        version = Tags.VERSION,
+        acceptedMinecraftVersions = "[1.7.10]",
+        // Server-side only: clients do not need the mod to join.
+        acceptableRemoteVersions = "*",
+        dependencies = "after:betterquesting"
 )
 public class GTNHTelegramMod {
     public static final String MOD_ID = "gtnhtelegram";
     public static final String MOD_NAME = "GTNH Telegram Achievements";
-    public static final String VERSION = "1.0.0";
 
     public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
 
+    /**
+     * How long reports of one completion are collected before it is published.
+     * BetterQuesting checks every online player once per 3 seconds, so all
+     * online teammates have reported by then.
+     */
+    private static final long COLLECT_WINDOW_MS = 4000L;
+
+    private QuestTracker tracker;
+    /** Kept as a Runnable so this class loads even when BetterQuesting is absent. */
+    private Runnable teamsRefresher;
+
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        ModConfig.load(event.getSuggestedConfigurationFile());
-        TelegramSender.configure(
-                ModConfig.botToken,
-                ModConfig.chatId,
-                ModConfig.messageThreadId,
-                ModConfig.connectTimeoutMs,
-                ModConfig.readTimeoutMs
-        );
-        if (Loader.isModLoaded("betterquesting")) {
-            MinecraftForge.EVENT_BUS.register(new BetterQuestingListener());
-            LOGGER.info("BetterQuesting integration enabled");
+        ModConfig config = ModConfig.load(event.getSuggestedConfigurationFile());
+
+        if (!config.enabled) {
+            LOGGER.info("{} is disabled in the config", MOD_NAME);
+            return;
         }
-        LOGGER.info("Loaded {} with Telegram notifications {}", MOD_NAME, ModConfig.enabled ? "enabled" : "disabled");
+
+        if (!Loader.isModLoaded("betterquesting")) {
+            LOGGER.warn("BetterQuesting is not installed, there are no quests to track");
+            return;
+        }
+
+        QuestFeed feed = createFeed(config, event.getModConfigurationDirectory().getParentFile());
+        TelegramClient telegram = createTelegram(config);
+
+        if (feed == null && telegram == null) {
+            LOGGER.warn("Neither Telegram notifications nor the quest feed are set up, nothing to do");
+            return;
+        }
+
+        TelegramNotifier notifier = telegram == null ? null : new TelegramNotifier(
+                telegram,
+                config.questMessageFormat,
+                config.questMessageFormatPlural,
+                config.questDigestFormat,
+                config.questDigestThreshold
+        );
+
+        tracker = new QuestTracker(new CompletionCollector(COLLECT_WINDOW_MS), feed, notifier, telegram, LOGGER);
+
+        final BetterQuestingListener listener = new BetterQuestingListener(
+                tracker,
+                config.sendRepeatableQuestNotifications,
+                config.questBaseUrl
+        );
+        MinecraftForge.EVENT_BUS.register(listener);
+        teamsRefresher = new Runnable() {
+            @Override
+            public void run() {
+                listener.refreshTeams();
+            }
+        };
+
+        LOGGER.info(
+                "{} {} is tracking quest completions (Telegram: {}, quest feed: {})",
+                MOD_NAME,
+                Tags.VERSION,
+                telegram == null ? "off" : "on",
+                feed == null ? "off" : feed.file() + ", " + feed.quests().size() + " entries loaded"
+        );
+    }
+
+    /** BetterQuesting has loaded the world's quest data by now. */
+    @Mod.EventHandler
+    public void serverStarted(FMLServerStartedEvent event) {
+        if (teamsRefresher == null) {
+            return;
+        }
+
+        try {
+            teamsRefresher.run();
+        } catch (RuntimeException e) {
+            LOGGER.error("Could not read BetterQuesting teams", e);
+        }
+    }
+
+    @Mod.EventHandler
+    public void serverStopping(FMLServerStoppingEvent event) {
+        if (tracker != null) {
+            tracker.flush();
+        }
+    }
+
+    private static QuestFeed createFeed(ModConfig config, File serverDirectory) {
+        if (!config.writeQuestFeed || config.questFeedFile.isEmpty()) {
+            return null;
+        }
+
+        File file = new File(config.questFeedFile);
+        if (!file.isAbsolute()) {
+            file = new File(serverDirectory, config.questFeedFile);
+        }
+
+        QuestFeed feed = new QuestFeed(file.toPath(), config.questFeedSize, LOGGER);
+        feed.load();
+        return feed;
+    }
+
+    private static TelegramClient createTelegram(ModConfig config) {
+        if (!config.sendQuestNotifications) {
+            return null;
+        }
+
+        if (!config.hasTelegramCredentials()) {
+            LOGGER.warn("Telegram notifications are on, but botToken or chatId is missing in config/gtnhtelegram.cfg");
+            return null;
+        }
+
+        return new TelegramClient(
+                config.botToken,
+                config.chatId,
+                config.messageThreadId,
+                config.connectTimeoutMs,
+                config.readTimeoutMs,
+                LOGGER
+        );
     }
 }
