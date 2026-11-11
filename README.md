@@ -5,7 +5,7 @@ Small server-side Forge 1.7.10 mod for GT New Horizons servers.
 It listens for BetterQuesting quest completions and
 
 - sends a Telegram message when a quest is completed, and
-- optionally keeps the most recent completions and the current teams in a
+- optionally keeps the most recent completions, every player and every team in a
   JSON file that a website can read.
 
 ## Features
@@ -109,14 +109,40 @@ reaches a player later through a team sync is not reported again.
 
 ## Quest feed
 
-With `writeQuestFeed=true` the mod rewrites a JSON file after every completion:
+With `writeQuestFeed=true` the mod keeps a JSON file with the latest
+completions and with every player and team BetterQuesting knows about:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "updated": 1794361996,
+  "chapters": [
+    { "name": "Tier 0 - Stone Age", "quests": 92 },
+    { "name": "Tier 0.5 - Steam", "quests": 115 }
+  ],
+  "players": [
+    {
+      "uuid": "dc960cb0-f409-47bb-8214-6c5fb06a10ab",
+      "name": "Steve",
+      "team": 1,
+      "done": [85, 105],
+      "lastQuest": 1794361996
+    },
+    {
+      "uuid": "fb3052e3-e4a9-475a-aa47-8d9a9e7c9e7b",
+      "name": "Alex",
+      "done": [89, 12],
+      "lastQuest": 1785413594
+    }
+  ],
   "teams": [
-    { "name": "smak", "members": ["Steve", "Alex"] }
+    {
+      "id": 1,
+      "name": "smak",
+      "members": ["dc960cb0-f409-47bb-8214-6c5fb06a10ab", "58ca1db4-88c6-4d01-8f1a-38f069665779"],
+      "done": [85, 105],
+      "lastQuest": 1794361996
+    }
   ],
   "quests": [
     {
@@ -125,21 +151,36 @@ With `writeQuestFeed=true` the mod rewrites a JSON file after every completion:
       "questId": "5c004ad6-5942-4e86-ba28-a705e59ebd18",
       "questUrl": "https://gtnhquestsbook.top/?id=XABK1llCToa6KKcF5Z69GA==",
       "chapter": "Tier 0 - Stone Age",
-      "team": "smak",
-      "players": ["Steve"]
+      "team": 1,
+      "players": ["dc960cb0-f409-47bb-8214-6c5fb06a10ab"]
     }
   ]
 }
 ```
 
+- Players are identified by UUID and teams by BetterQuesting party id
+  everywhere; names appear only in `players` and `teams`. A reader that looks
+  names up there shows the current ones even for old `quests` entries, so a
+  renamed player or team needs no special handling.
+- `chapters` lists the quest book chapters in book order with the number of
+  quests that count: hidden quests and `Trigger:` helper quests do not.
+- `players` lists everyone who has ever joined. `done` is the number of
+  completed quests per chapter, parallel to `chapters`. `team` is missing for
+  a player without a team.
+- `teams` lists the parties with at least two members; a party of one is a
+  solo player. A team's `done` counts the quests completed by at least one
+  member.
 - `quests` holds the last `questFeedSize` completions, newest first. `team` is
-  empty for a solo player.
-- `teams` lists the parties with at least two members. It is refreshed when the
-  server starts and after every completion.
-- `time` and `updated` are Unix timestamps in seconds.
+  missing for a solo player.
+- `chapters`, `players` and `teams` are rebuilt when the server starts, after
+  every completion and every five minutes, which is how a changed team or a
+  new name gets into the file. The file is rewritten only when something in it
+  has changed.
+- `time`, `lastQuest` and `updated` are Unix timestamps in seconds.
 - `questFeedFile` is resolved against the server directory unless it is
   absolute. The file is replaced atomically and loaded again on startup, so the
-  feed survives restarts.
+  feed survives restarts. A file written in an older format is ignored and
+  replaced.
 
 Point `questFeedFile` at a directory that is served over HTTP (for example
 `dynmap/web/quests.json`) to make the feed available to a website.
