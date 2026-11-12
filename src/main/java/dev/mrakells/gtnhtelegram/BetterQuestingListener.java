@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 
 /**
  * Turns BetterQuesting events into {@link QuestCompletion}s and BetterQuesting
@@ -150,9 +151,23 @@ public class BetterQuestingListener {
             builder.chapter(clean(entry.getValue().getProperty(NativeProps.NAME)), questIds);
         }
 
-        for (String name : names.getAllNames()) {
-            UUID playerId = names.getUUID(name);
-            if (playerId == null) {
+        // Not getAllNames(): BetterQuesting builds that list once and keeps it until the world is
+        // reloaded, so a renamed player is still listed under the old name, which no longer has a
+        // UUID, and a new player is not listed at all. The saved form is read from the live cache.
+        NBTTagList known = names.writeToNBT(new NBTTagList(), null);
+
+        for (int i = 0; i < known.tagCount(); i++) {
+            NBTTagCompound cached = known.getCompoundTagAt(i);
+            String name = clean(cached.getString("name"));
+            UUID playerId;
+
+            try {
+                playerId = UUID.fromString(cached.getString("uuid"));
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+
+            if (name.isEmpty()) {
                 continue;
             }
 
