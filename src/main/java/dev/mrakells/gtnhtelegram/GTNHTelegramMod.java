@@ -46,6 +46,17 @@ public class GTNHTelegramMod {
             return;
         }
 
+        // The tab list has nothing to do with quests, so it works without BetterQuesting too.
+        if (config.tabListEnabled) {
+            FMLCommonHandler.instance().bus().register(new TabList(
+                    config.tabListHeader,
+                    config.tabListFooter,
+                    config.tabListRefreshSeconds,
+                    event.getModConfigurationDirectory()
+            ));
+            LOGGER.info("{} sends the tab list header and footer", MOD_NAME);
+        }
+
         if (!Loader.isModLoaded("betterquesting")) {
             LOGGER.warn("BetterQuesting is not installed, there are no quests to track");
             return;

@@ -104,7 +104,7 @@ final class QuestMessages {
     }
 
     /** Replaces known placeholders in one pass, so a value can never be mistaken for a placeholder. */
-    private static String fill(String template, Map<String, String> values) {
+    static String fill(String template, Map<String, String> values) {
         Matcher matcher = PLACEHOLDER.matcher(template.replace("\\n", "\n"));
         StringBuffer result = new StringBuffer();
 

@@ -6,6 +6,7 @@ import net.minecraftforge.common.config.Configuration;
 /** Settings from config/gtnhtelegram.cfg, read once at startup. */
 public final class ModConfig {
     private static final String CATEGORY = Configuration.CATEGORY_GENERAL;
+    private static final String TAB_LIST = "tablist";
 
     public final boolean enabled;
 
@@ -25,6 +26,11 @@ public final class ModConfig {
     public final boolean writeQuestFeed;
     public final String questFeedFile;
     public final int questFeedSize;
+
+    public final boolean tabListEnabled;
+    public final String tabListHeader;
+    public final String tabListFooter;
+    public final int tabListRefreshSeconds;
 
     private ModConfig(Configuration configuration) {
         enabled = configuration.getBoolean(
@@ -90,6 +96,24 @@ public final class ModConfig {
         questFeedSize = configuration.getInt(
                 "questFeedSize", CATEGORY, 50, 1, 500,
                 "How many of the most recent completed quests the feed keeps."
+        );
+
+        configuration.setCategoryComment(TAB_LIST, "Header and footer of the ServerUtilities tab list (TAB). Needs ServerUtilities with modernTabOverlay=true on the clients.");
+        tabListEnabled = configuration.getBoolean(
+                "enabled", TAB_LIST, false,
+                "Send the header and footer below to every player. Off: players see the ones from their own ServerUtilities config."
+        );
+        tabListHeader = configuration.getString(
+                "header", TAB_LIST, "&b&lGTNH Server",
+                "Tab list header. Use & for color and format codes, \\n for a line break. Placeholders: {online}, {max}, {tps}, {tpsColor}, {mspt}, {player}, {packVersion}."
+        );
+        tabListFooter = configuration.getString(
+                "footer", TAB_LIST, "&7Online: &f{online}&7/&f{max} &8| &7TPS: {tpsColor}{tps}",
+                "Tab list footer. Same codes and placeholders as the header."
+        );
+        tabListRefreshSeconds = configuration.getInt(
+                "refreshSeconds", TAB_LIST, 5, 0, 3600,
+                "How often online players get fresh values for the placeholders. 0 sends the header and footer only on login."
         );
     }
 

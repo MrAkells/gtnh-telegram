@@ -8,6 +8,9 @@ It listens for BetterQuesting quest completions and
 - optionally keeps the most recent completions, every player and every team in a
   JSON file that a website can read.
 
+It can also set the header and footer of the ServerUtilities tab list for every
+player.
+
 ## Features
 
 - one notification per completed quest, even when several teammates are online
@@ -69,6 +72,12 @@ readTimeoutMs=5000
 writeQuestFeed=false
 questFeedFile=gtnhtelegram/quests.json
 questFeedSize=50
+
+# category tablist
+enabled=false
+header=&b&lGTNH Server
+footer=&7Online: &f{online}&7/&f{max} &8| &7TPS: {tpsColor}{tps}
+refreshSeconds=5
 ```
 
 `enabled` switches the whole mod. Telegram notifications and the quest feed
@@ -184,6 +193,33 @@ completions and with every player and team BetterQuesting knows about:
 
 Point `questFeedFile` at a directory that is served over HTTP (for example
 `dynmap/web/quests.json`) to make the feed available to a website.
+
+## Tab list
+
+ServerUtilities replaces the vanilla player list with its own one
+(`modernTabOverlay=true`), but it draws the list on the client and takes the
+header and footer from the client's own `serverutilities.cfg`. Changing them in
+the server's config therefore shows nothing to players.
+
+With `enabled=true` in the `tablist` category the mod sends `header` and
+`footer` to every player on the `SU|TabHF` channel, which the ServerUtilities
+client reads as a UTF-8 JSON object `{"header": "...", "footer": "..."}` and
+prefers over its own config. Players without ServerUtilities ignore it.
+
+Use `&` for color and format codes and `\n` for a line break. Placeholders:
+
+| Placeholder  | Value                                                   |
+| ------------ | ------------------------------------------------------- |
+| `{online}`   | players online                                          |
+| `{max}`      | player slots                                            |
+| `{tps}`      | ticks per second over the last 100 ticks, at most 20    |
+| `{tpsColor}` | `&a` from 19.5 TPS, `&e` from 15, `&c` below           |
+| `{mspt}`     | mean tick time in milliseconds                          |
+| `{player}`   | name of the player who sees the list                    |
+| `{packVersion}` | GTNH pack version, `ModPackVersion` from `config/GTNewHorizons/dreamcraft.cfg` |
+
+The values are sent on login and refreshed every `refreshSeconds`
+(`0`: on login only).
 
 ## Telegram
 
